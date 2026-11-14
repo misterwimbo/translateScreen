@@ -3,5 +3,7 @@
   "cible": "fr",
   "presse_papiers_auto": true,
   "overlay_visible": true,
-  "opacite": 0.5
+  "opacite": 0.8023255813953488,
+  "overlay_geo": "467x278+57+426",
+  "touche_capture": "F8"
 }

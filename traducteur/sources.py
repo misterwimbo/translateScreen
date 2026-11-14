@@ -64,6 +64,60 @@ LANGUES_TESSERACT = {
 }
 
 
+def normaliser_touche(spec):
+    """'F8' -> '<f8>' ; 'ctrl+F8' -> '<ctrl>+<f8>' (format pynput)."""
+    mods = {"ctrl": "<ctrl>", "alt": "<alt>", "shift": "<shift>",
+            "win": "<cmd>", "maj": "<shift>"}
+    parts = []
+    for p in (spec or "").strip().lower().split("+"):
+        p = p.strip()
+        if not p:
+            continue
+        if p in mods:
+            parts.append(mods[p])
+        elif len(p) == 1:
+            parts.append(p)
+        elif p.startswith("f") and p[1:].isdigit():
+            parts.append(f"<{p}>")
+        else:
+            raise ValueError(f"Touche inconnue : {p}")
+    if not parts:
+        raise ValueError("Touche vide")
+    return "+".join(parts)
+
+
+class EcouteurTouche:
+    """Raccourci global (pynput). Le callback tourne dans un thread :
+    l'appeler via root.after() côté UI."""
+
+    def __init__(self, spec, callback):
+        self.spec = spec
+        self.callback = callback
+        self._ecouteur = None
+
+    def demarrer(self):
+        self.arreter()
+        from pynput import keyboard
+        combo = normaliser_touche(self.spec)
+        self._ecouteur = keyboard.GlobalHotKeys({combo: self._declenche})
+        self._ecouteur.daemon = True
+        self._ecouteur.start()
+
+    def _declenche(self):
+        try:
+            self.callback()
+        except Exception:
+            pass
+
+    def arreter(self):
+        e, self._ecouteur = self._ecouteur, None
+        if e is not None:
+            try:
+                e.stop()
+            except Exception:
+                pass
+
+
 def trouver_tesseract():
     w = shutil.which("tesseract")
     if w:
@@ -101,14 +155,23 @@ def capturer_zone(root):
             x2, y2 = max(depart["x"], e.x), max(depart["y"], e.y)
             if x2 - x1 > 10 and y2 - y1 > 10:
                 resultat["box"] = (x1, y1, x2 - x1, y2 - y1)
+            root._sel_cancel = None
+            sel.destroy()
+
+        def annuler(_e=None):
+            root._sel_cancel = None
             sel.destroy()
 
         canvas.bind("<ButtonPress-1>", debut)
         canvas.bind("<B1-Motion>", glisser)
         canvas.bind("<ButtonRelease-1>", fin)
-        sel.bind("<Escape>", lambda _e: sel.destroy())
+        sel.bind("<Escape>", annuler)
+        root._sel_cancel = sel.destroy
         sel.grab_set()
-        root.wait_window(sel)
+        try:
+            root.wait_window(sel)
+        finally:
+            root._sel_cancel = None
     finally:
         root.deiconify()
     return resultat.get("box")

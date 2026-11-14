@@ -5,8 +5,8 @@ from tkinter import messagebox, ttk
 
 from traducteur import moteur
 from traducteur.overlay import Overlay
-from traducteur.sources import (PressePapiers, capturer_zone, ocr,
-                                photographier, trouver_tesseract)
+from traducteur.sources import (EcouteurTouche, PressePapiers, capturer_zone,
+                                ocr, photographier, trouver_tesseract)
 
 LANGUES = [
     ("auto", "Automatique"), ("fr", "Français"), ("en", "Anglais"),
@@ -54,6 +54,10 @@ class App(tk.Tk):
         ttk.Scale(opts, from_=0.5, to=1.0, variable=self.opa_var,
                   command=lambda _v: self.overlay.set_opacite(self.opa_var.get()),
                   length=100).pack(side="left")
+        ttk.Label(opts, text="Touche :").pack(side="left", padx=(12, 4))
+        self.touche_var = tk.StringVar(value=str(cfg.get("touche_capture", "F8")))
+        ttk.Entry(opts, textvariable=self.touche_var, width=12).pack(side="left")
+        self.touche_var.trace_add("write", self._bascule_touche)
 
         corps = ttk.Frame(self, padding=10)
         corps.pack(fill="both", expand=True)
@@ -107,6 +111,9 @@ class App(tk.Tk):
         if self.auto_var.get():
             self.clip.demarrer()
         self.auto_var.trace_add("write", self._bascule_auto)
+        self.ecoute = EcouteurTouche(self.touche_var.get(),
+                                     lambda: self.after(0, self.capturer))
+        self._bascule_touche()
         self.charger_histo()
         self.protocol("WM_DELETE_WINDOW", self.fermer)
 
@@ -169,6 +176,15 @@ class App(tk.Tk):
 
     # --- capture + OCR (étape 4)
     def capturer(self):
+        cancel = getattr(self, "_sel_cancel", None)
+        if cancel:  # capture déjà ouverte : 2e appui = annuler
+            self._sel_cancel = None
+            try:
+                cancel()
+            except tk.TclError:
+                pass
+            self.statut.set("Capture annulée.")
+            return
         if self.en_cours:
             return
         tess = trouver_tesseract()
@@ -265,6 +281,15 @@ class App(tk.Tk):
         else:
             self.clip.arreter()
 
+    def _bascule_touche(self, *_a):
+        try:
+            self.ecoute.spec = self.touche_var.get().strip() or "F8"
+            self.ecoute.demarrer()
+        except ImportError:
+            self.statut.set("pynput manquant : pip install -r requirements.txt")
+        except Exception as e:
+            self.statut.set("Touche invalide : " + str(e)[:100])
+
     def _bascule_overlay(self):
         if self.ov_var.get():
             self.overlay.afficher(self._resultat() or "…")
@@ -277,8 +302,10 @@ class App(tk.Tk):
                               "presse_papiers_auto": self.auto_var.get(),
                               "overlay_visible": self.ov_var.get(),
                               "opacite": self.opa_var.get(),
-                              "overlay_geo": self.overlay.geometry()})
+                              "overlay_geo": self.overlay.geometry(),
+                              "touche_capture": self.touche_var.get().strip() or "F8"})
         self.clip.arreter()
+        self.ecoute.arreter()
         try:
             self.overlay.destroy()
         except tk.TclError:
