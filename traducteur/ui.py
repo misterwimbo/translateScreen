@@ -98,7 +98,7 @@ class App(tk.Tk):
         ttk.Label(self, textvariable=self.statut,
                   padding=(10, 0, 10, 10)).pack(anchor="w")
 
-        self.overlay = Overlay(self)
+        self.overlay = Overlay(self, geo=cfg.get("overlay_geo"))
         self.overlay.set_opacite(self.opa_var.get())
         if self.ov_var.get():
             self.overlay.deiconify()
@@ -276,7 +276,8 @@ class App(tk.Tk):
         moteur.sauver_config({"source": src, "cible": dst,
                               "presse_papiers_auto": self.auto_var.get(),
                               "overlay_visible": self.ov_var.get(),
-                              "opacite": self.opa_var.get()})
+                              "opacite": self.opa_var.get(),
+                              "overlay_geo": self.overlay.geometry()})
         self.clip.arreter()
         try:
             self.overlay.destroy()
