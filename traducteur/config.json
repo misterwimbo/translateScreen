@@ -1,5 +1,7 @@
 {
   "source": "auto",
   "cible": "fr",
-  "presse_papiers_auto": true
+  "presse_papiers_auto": true,
+  "overlay_visible": true,
+  "opacite": 0.5
 }
